@@ -18,17 +18,14 @@ jobs:
           flutter-version: "3.24.5"
           channel: "stable"
           cache: true
-      - name: Build Android APK cleanly
+      - name: Build Clean APK
         run: |
-          flutter create --org com.otared --project-name otared_vpn /tmp/build_app
-          sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' /tmp/build_app/android/settings.gradle
-          cp -f pubspec.yaml /tmp/build_app/pubspec.yaml
-          cp -rf lib/* /tmp/build_app/lib/
-          cd /tmp/build_app
-          flutter pub get
+          flutter create --org com.otared --project-name otared_vpn /tmp/clean_app
+          cp -f lib/main.dart /tmp/clean_app/lib/main.dart
+          cd /tmp/clean_app
           flutter build apk --release --split-per-abi
       - uses: actions/upload-artifact@v4
         with:
           name: otared-vpn-android-apks
-          path: /tmp/build_app/build/app/outputs/flutter-apk/*.apk
+          path: /tmp/clean_app/build/app/outputs/flutter-apk/*.apk
           
