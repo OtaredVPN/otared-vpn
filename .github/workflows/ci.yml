@@ -18,15 +18,16 @@ jobs:
           flutter-version: "3.24.5"
           channel: "stable"
           cache: true
-      - name: Generate clean Android project wrapper
+      - name: Build Android APK cleanly
         run: |
-          flutter create --org com.otared --project-name otared_vpn /tmp/otared_app
-          cp -rn /tmp/otared_app/android .
-          cp -rn /tmp/otared_app/.metadata . || true
-      - run: flutter pub get
-      - run: flutter build apk --release --split-per-abi
+          flutter create --org com.otared --project-name otared_vpn /tmp/build_app
+          cp -f pubspec.yaml /tmp/build_app/pubspec.yaml
+          cp -rf lib/* /tmp/build_app/lib/
+          cd /tmp/build_app
+          flutter pub get
+          flutter build apk --release --split-per-abi
       - uses: actions/upload-artifact@v4
         with:
           name: otared-vpn-android-apks
-          path: build/app/outputs/flutter-apk/*.apk
+          path: /tmp/build_app/build/app/outputs/flutter-apk/*.apk
           
