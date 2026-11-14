@@ -198,7 +198,7 @@ class _OtaredDashboardState extends State<OtaredDashboard> {
               decoration: BoxDecoration(
                 color: const Color(0xFF111318),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: statusColor.withValues(alpha: 0.5)),
+                border: Border.all(color: statusColor.withOpacity(0.5)),
               ),
               child: Text(
                 _connected
@@ -221,7 +221,7 @@ class _OtaredDashboardState extends State<OtaredDashboard> {
                   color: const Color(0xFF111318),
                   border: Border.all(color: statusColor, width: 2),
                   boxShadow: _connected
-                      ? [BoxShadow(color: const Color(0xFF10B981).withValues(alpha: 0.25), blurRadius: 32)]
+                      ? [BoxShadow(color: const Color(0xFF10B981).withOpacity(0.25), blurRadius: 32)]
                       : [],
                 ),
                 child: Column(
@@ -288,7 +288,7 @@ class _OtaredDashboardState extends State<OtaredDashboard> {
                   itemBuilder: (ctx, i) => ChoiceChip(
                     label: Text(_servers[i].name, style: const TextStyle(fontSize: 11)),
                     selected: i == _selectedIndex,
-                    selectedColor: const Color(0xFF10B981).withValues(alpha: 0.25),
+                    selectedColor: const Color(0xFF10B981).withOpacity(0.25),
                     onSelected: (_) => setState(() => _selectedIndex = i),
                   ),
                 ),
