@@ -21,6 +21,7 @@ jobs:
       - name: Build Android APK cleanly
         run: |
           flutter create --org com.otared --project-name otared_vpn /tmp/build_app
+          sed -i 's/id "org.jetbrains.kotlin.android" version "[^"]*"/id "org.jetbrains.kotlin.android" version "1.9.24"/' /tmp/build_app/android/settings.gradle
           cp -f pubspec.yaml /tmp/build_app/pubspec.yaml
           cp -rf lib/* /tmp/build_app/lib/
           cd /tmp/build_app
