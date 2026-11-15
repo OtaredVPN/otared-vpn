@@ -84,12 +84,12 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
   List<VpnServer> _servers = [];
   List<VpnSubscription> _subs = [];
   String? _selectedId;
-  final List<String> _logs = ['[OTaredCore] Dual-Core Engine Ready'];
+  final List<String> _logs = ['[OTaredCore] Engine Initialized'];
 
-  String _routingMode = 'bypass_ir';
+  String _routingMode = 'global';
   String _dnsServer = 'https://1.1.1.1/dns-query';
-  bool _enableFragment = true;
-  bool _enableMux = true;
+  bool _enableFragment = false;
+  bool _enableMux = false;
   bool _enableIpv6 = false;
   final int _socksPort = 10808;
   final int _httpPort = 10809;
@@ -130,10 +130,10 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
       _subs = (jsonDecode(subRaw) as List).map((e) => VpnSubscription.fromJson(e)).toList();
     }
     _selectedId = prefs.getString('otared_selected') ?? (_servers.isNotEmpty ? _servers.first.id : null);
-    _routingMode = prefs.getString('otared_routing') ?? 'bypass_ir';
+    _routingMode = prefs.getString('otared_routing') ?? 'global';
     _dnsServer = prefs.getString('otared_dns') ?? 'https://1.1.1.1/dns-query';
-    _enableFragment = prefs.getBool('otared_frag') ?? true;
-    _enableMux = prefs.getBool('otared_mux') ?? true;
+    _enableFragment = prefs.getBool('otared_frag') ?? false;
+    _enableMux = prefs.getBool('otared_mux') ?? false;
     _blockedApps = prefs.getString('otared_apps') ?? '';
     if (mounted) setState(() {});
   }
@@ -158,27 +158,15 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
     });
   }
 
-  String _compileOptimizedXrayConfig(VpnServer srv) {
-    String baseJson;
-    if (srv.rawUri.trim().startsWith('{')) {
-      baseJson = srv.rawUri;
-    } else {
-      final parsed = FlutterV2ray.parseFromURL(srv.rawUri);
-      baseJson = parsed.getFullConfiguration();
+  String _buildConfig(VpnServer srv) {
+    final baseJson = srv.rawUri.trim().startsWith('{')
+        ? srv.rawUri
+        : FlutterV2ray.parseFromURL(srv.rawUri).getFullConfiguration();
+    if (!_enableFragment && !_enableMux && _routingMode == 'global') {
+      return baseJson;
     }
     final cfg = jsonDecode(baseJson) as Map<String, dynamic>;
     cfg['dns'] = {'servers': [_dnsServer, '8.8.8.8', 'localhost']};
-    cfg['inbounds'] = [
-      {
-        'tag': 'socks',
-        'port': _socksPort,
-        'listen': '127.0.0.1',
-        'protocol': 'socks',
-        'settings': {'auth': 'noauth', 'udp': true},
-        'sniffing': {'enabled': true, 'destOverride': ['http', 'tls', 'quic']}
-      },
-      {'tag': 'http', 'port': _httpPort, 'listen': '127.0.0.1', 'protocol': 'http'}
-    ];
     final outbounds = (cfg['outbounds'] as List?) ?? [];
     if (outbounds.isNotEmpty && outbounds[0] is Map<String, dynamic>) {
       final proxyOut = outbounds[0] as Map<String, dynamic>;
@@ -196,54 +184,60 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
         proxyOut['streamSettings'] = stream;
       }
     }
-    final rules = [
-      {'type': 'field', 'outboundTag': 'block', 'domain': ['geosite:category-ads-all']},
-    ];
+    final rules = >[];
     if (_routingMode == 'bypass_ir') {
-      rules.add({'type': 'field', 'outboundTag': 'direct', 'domain': ['geosite:ir', 'regexp:.*\\.ir\$']});
-      rules.add({'type': 'field', 'outboundTag': 'direct', 'ip': ['geoip:ir', 'geoip:private']});
+      rules.add({'type': 'field', 'outboundTag': 'direct', 'domain': ['regexp:.*\\.ir\$']});
     } else if (_routingMode == 'direct') {
       rules.add({'type': 'field', 'outboundTag': 'direct', 'port': '0-65535'});
     }
-    cfg['routing'] = {'domainStrategy': 'IPIfNonMatch', 'rules': rules};
+    if (rules.isNotEmpty) {
+      cfg['routing'] = {'domainStrategy': 'IPIfNonMatch', 'rules': rules};
+    }
     return jsonEncode(cfg);
   }
-    Future<void> _toggleVpn() async {
-    if (_status.state == 'CONNECTED') {
-      await _v2ray.stopV2Ray();
-      _log('Disconnected.');
-      return;
-    }
-    if (_servers.isEmpty) {
-      _openImportModal();
-      return;
-    }
-    final srv = _servers.firstWhere((e) => e.id == _selectedId, orElse: () => _servers.first);
-    if (await _v2ray.requestPermission()) {
-      final fullConfig = _compileOptimizedXrayConfig(srv);
-      final blockedList = _blockedApps.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
-      _log('Connecting to ${srv.name} (${srv.protocol})...');
+
+  Future<void> _toggleVpn() async {
+    try {
+      if (_status.state == 'CONNECTED') {
+        await _v2ray.stopV2Ray();
+        _log('Disconnected.');
+        return;
+      }
+      if (_servers.isEmpty) {
+        _openImportModal();
+        return;
+      }
+      final srv = _servers.firstWhere((e) => e.id == _selectedId, orElse: () => _servers.first);
+      _log('Requesting VPN permission...');
+      final granted = await _v2ray.requestPermission();
+      if (!granted) {
+        _log('Permission denied.');
+        return;
+      }
+      final cfg = _buildConfig(srv);
+      final blocked = _blockedApps.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      _log('Starting tunnel for ${srv.name}...');
       await _v2ray.startV2Ray(
         remark: 'OTaredVPN - ${srv.name}',
-        config: fullConfig,
-        blockedApps: blockedList.isEmpty ? null : blockedList,
-        bypassSubnets: _routingMode == 'bypass_ir' ? ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'] : null,
+        config: cfg,
+        blockedApps: blocked.isEmpty ? null : blocked,
         proxyOnly: false,
       );
-    } else {
-      _log('VPN permission denied.');
+      _log('Tunnel command sent.');
+    } catch (e) {
+      _log('ERROR: $e');
     }
   }
-
-  Future<void> _testSinglePing(VpnServer srv) async {
+    Future<void> _testSinglePing(VpnServer srv) async {
     setState(() => srv.pingMs = -2);
     try {
-      final cfg = _compileOptimizedXrayConfig(srv);
+      final cfg = _buildConfig(srv);
       final delay = await _v2ray.getServerDelay(config: cfg);
       setState(() => srv.pingMs = delay);
       _log('Ping [${srv.name}]: ${delay}ms');
-    } catch (_) {
+    } catch (e) {
       setState(() => srv.pingMs = -1);
+      _log('Ping err: $e');
     }
     _saveState();
   }
@@ -258,7 +252,7 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
     }
     if (best != null) {
       setState(() => _selectedId = best!.id);
-      _log('Smart Selected: ${best.name} (${best.pingMs}ms)');
+      _log('Best: ${best.name} (${best.pingMs}ms)');
     }
     setState(() => _testingPing = false);
     _saveState();
@@ -292,23 +286,13 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
   }
 
   void _openQrScanner() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (ctx) => Scaffold(
-          appBar: AppBar(title: Text(t('اسکن QR سنایی', 'Scan QR'))),
-          body: MobileScanner(
-            onDetect: (capture) {
-              final code = capture.barcodes.firstOrNull?.rawValue;
-              if (code != null && code.isNotEmpty) {
-                Navigator.pop(ctx);
-                _importRawText(code);
-              }
-            },
-          ),
-        ),
-      ),
-    );
+    Navigator.push(context, MaterialPageRoute(builder: (ctx) => Scaffold(
+      appBar: AppBar(title: Text(t('اسکن QR سنایی', 'Scan QR'))),
+      body: MobileScanner(onDetect: (capture) {
+        final code = capture.barcodes.firstOrNull?.rawValue;
+        if (code != null && code.isNotEmpty) { Navigator.pop(ctx); _importRawText(code); }
+      }),
+    )));
   }
 
   void _openImportModal() {
@@ -320,25 +304,19 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
       builder: (ctx) => Padding(
         padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(t('افزودن کانفیگ / لینک ساب سنایی', 'Import 3x-ui Config / Sub'), style: const TextStyle(fontSize: 15)),
-            const SizedBox(height: 12),
-            TextField(controller: ctrl, maxLines: 4, style: const TextStyle(fontSize: 12, fontFamily: 'monospace'), decoration: InputDecoration(hintText: 'https://sub... | vless:// | vmess:// | JSON', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(child: OutlinedButton.icon(onPressed: () async { final d = await Clipboard.getData(Clipboard.kTextPlain); if (d?.text != null) ctrl.text = d!.text!; }, icon: const Icon(Icons.paste_rounded, size: 18), label: Text(t('کلیپ‌بورد', 'Paste')))),
-                const SizedBox(width: 8),
-                Expanded(child: OutlinedButton.icon(onPressed: () { Navigator.pop(ctx); _openQrScanner(); }, icon: const Icon(Icons.qr_code_scanner, size: 18), label: const Text('QR'))),
-                const SizedBox(width: 8),
-                Expanded(child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF14B88A), foregroundColor: Colors.black), onPressed: () { Navigator.pop(ctx); _importRawText(ctrl.text); }, child: Text(t('ثبت', 'Add')))),
-              ],
-            ),
-          ],
-        ),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text(t('افزودن کانفیگ / لینک ساب سنایی', 'Import 3x-ui Config / Sub'), style: const TextStyle(fontSize: 15)),
+          const SizedBox(height: 12),
+          TextField(controller: ctrl, maxLines: 4, style: const TextStyle(fontSize: 12, fontFamily: 'monospace'), decoration: InputDecoration(hintText: 'https://sub... | vless:// | vmess:// | JSON', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
+          const SizedBox(height: 12),
+          Row(children: [
+            Expanded(child: OutlinedButton.icon(onPressed: () async { final d = await Clipboard.getData(Clipboard.kTextPlain); if (d?.text != null) ctrl.text = d!.text!; }, icon: const Icon(Icons.paste_rounded, size: 18), label: Text(t('کلیپ‌بورد', 'Paste')))),
+            const SizedBox(width: 8),
+            Expanded(child: OutlinedButton.icon(onPressed: () { Navigator.pop(ctx); _openQrScanner(); }, icon: const Icon(Icons.qr_code_scanner, size: 18), label: const Text('QR'))),
+            const SizedBox(width: 8),
+            Expanded(child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF14B88A), foregroundColor: Colors.black), onPressed: () { Navigator.pop(ctx); _importRawText(ctrl.text); }, child: Text(t('ثبت', 'Add')))),
+          ]),
+        ]),
       ),
     );
   }
@@ -351,7 +329,8 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
     while (val >= 1024 && idx < units.length - 1) { val /= 1024; idx++; }
     return '${val.toStringAsFixed(2)} ${units[idx]}';
   }
-    @override
+
+  @override
   Widget build(BuildContext context) {
     final isConnected = _status.state == 'CONNECTED';
     final accent = Theme.of(context).colorScheme.primary;
@@ -481,7 +460,7 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
 
   Widget _buildSettingsTab(Color accent) {
     return ListView(padding: const EdgeInsets.all(16), children: [
-      ListTile(title: Text(t('مسیریابی', 'Routing')), trailing: DropdownButton<String>(value: _routingMode, items: [DropdownMenuItem(value: 'bypass_ir', child: Text(t('دور زدن ایران', 'Bypass IR'))), DropdownMenuItem(value: 'global', child: Text(t('پروکسی کامل', 'Global'))), DropdownMenuItem(value: 'direct', child: Text(t('مستقیم', 'Direct')))], onChanged: (v) { if (v != null) setState(() => _routingMode = v); _saveState(); })),
+      ListTile(title: Text(t('مسیریابی', 'Routing')), trailing: DropdownButton<String>(value: _routingMode, items: [DropdownMenuItem(value: 'global', child: Text(t('پروکسی کامل', 'Global'))), DropdownMenuItem(value: 'bypass_ir', child: Text(t('دور زدن ایران', 'Bypass IR'))), DropdownMenuItem(value: 'direct', child: Text(t('مستقیم', 'Direct')))], onChanged: (v) { if (v != null) setState(() => _routingMode = v); _saveState(); })),
       ListTile(title: const Text('DNS'), trailing: DropdownButton<String>(value: _dnsServer, items: const [DropdownMenuItem(value: 'https://1.1.1.1/dns-query', child: Text('1.1.1.1 DoH')), DropdownMenuItem(value: 'https://dns.google/dns-query', child: Text('Google DoH')), DropdownMenuItem(value: '1.1.1.1', child: Text('UDP 1.1.1.1'))], onChanged: (v) { if (v != null) setState(() => _dnsServer = v); _saveState(); })),
       SwitchListTile(activeColor: accent, title: const Text('TLS Fragment'), value: _enableFragment, onChanged: (v) { setState(() => _enableFragment = v); _saveState(); }),
       SwitchListTile(activeColor: accent, title: const Text('Multiplexing (Mux)'), value: _enableMux, onChanged: (v) { setState(() => _enableMux = v); _saveState(); }),
