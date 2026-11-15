@@ -18,14 +18,20 @@ jobs:
           flutter-version: "3.24.5"
           channel: "stable"
           cache: true
-      - name: Build Clean APK
+      - name: Build OTaredVPN Release APK
         run: |
-          flutter create --org com.otared --project-name otared_vpn /tmp/clean_app
-          cp -f lib/main.dart /tmp/clean_app/lib/main.dart
-          cd /tmp/clean_app
+          flutter create --org com.otared --project-name otared_vpn /tmp/otared_build
+          cp -f pubspec.yaml /tmp/otared_build/pubspec.yaml
+          cp -rf lib/* /tmp/otared_build/lib/
+          mkdir -p /tmp/otared_build/assets
+          cp -rf assets/* /tmp/otared_build/assets/ || true
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/' /tmp/otared_build/android/app/build.gradle
+          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/' /tmp/otared_build/android/app/build.gradle
+          cd /tmp/otared_build
+          flutter pub get
           flutter build apk --release --split-per-abi
       - uses: actions/upload-artifact@v4
         with:
           name: otared-vpn-android-apks
-          path: /tmp/clean_app/build/app/outputs/flutter-apk/*.apk
+          path: /tmp/otared_build/build/app/outputs/flutter-apk/*.apk
           
