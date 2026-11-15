@@ -86,14 +86,13 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
   String? _selectedId;
   final List<String> _logs = ['[OTaredCore] Engine initialized (Sing-box / Xray Dual-Core Ready)'];
 
-  // تنظیمات پیشرفته شبکه و بهینه‌سازی سرعت
-  String _routingMode = 'bypass_ir'; // bypass_ir, global, direct
+  String _routingMode = 'bypass_ir';
   String _dnsServer = 'https://1.1.1.1/dns-query';
   bool _enableFragment = true;
   bool _enableMux = true;
   bool _enableIpv6 = false;
-  int _socksPort = 10808;
-  int _httpPort = 10809;
+  final int _socksPort = 10808;
+  final int _httpPort = 10809;
   String _blockedApps = '';
   final List<double> _speedHistory = List.filled(20, 0.0, growable: true);
 
@@ -117,7 +116,10 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
   }
 
   Future<void> _initEngine() async {
-    await _v2ray.initializeV2Ray();
+    await _v2ray.initializeV2Ray(
+      notificationIconResourceType: 'mipmap',
+      notificationIconResourceName: 'ic_launcher',
+    );
     final prefs = await SharedPreferences.getInstance();
     final srvRaw = prefs.getString('otared_servers');
     final subRaw = prefs.getString('otared_subs');
@@ -149,6 +151,7 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
   }
 
   void _log(String msg) {
+    if (!mounted) return;
     setState(() {
       _logs.insert(0, '[${TimeOfDay.now().format(context)}] $msg');
       if (_logs.length > 80) _logs.removeLast();
@@ -166,12 +169,10 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
 
     final cfg = jsonDecode(baseJson) as Map<String, dynamic>;
 
-    // 1. بهینه‌سازی DNS (DoH / DoT / UDP)
     cfg['dns'] = {
       'servers': [_dnsServer, '8.8.8.8', 'localhost']
     };
 
-    // 2. بهینه‌سازی Inbound (SOCKS5 + HTTP Proxy محلی)
     cfg['inbounds'] = [
       {
         'tag': 'socks',
@@ -189,7 +190,6 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
       }
     ];
 
-    // 3. تزریق Fragment و Mux برای عبور از فیلترینگ و کاهش تأخیر
     final outbounds = (cfg['outbounds'] as List?) ?? [];
     if (outbounds.isNotEmpty && outbounds[0] is Map<String, dynamic>) {
       final proxyOut = outbounds[0] as Map<String, dynamic>;
@@ -210,7 +210,6 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
       }
     }
 
-    // 4. موتور قوانین مسیریابی هوشمند (Bypass Iran / Direct / Block Ads)
     final rules = >[
       {'type': 'field', 'outboundTag': 'block', 'domain': ['geosite:category-ads-all']},
     ];
@@ -554,4 +553,6 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
           if (_proMode)
             Row(
               children: [
-                _statCard(t('دانلود لحظه‌ای', 'DOWNLOAD
+                _statCard(t('دانلود لحظه‌ای', 'DOWNLOAD'), '${_formatBytes(_status.downloadSpeed)}/s', accent),
+                const SizedBox(width: 10),
+                _statCard(t('آپلود لحظه‌ای', 'UPLOAD'), '${_formatBytes(
