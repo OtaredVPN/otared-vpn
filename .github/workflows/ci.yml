@@ -15,6 +15,9 @@ jobs:
           flutter-version: '3.x'
           channel: 'stable'
           
+      # این دستور به صورت خودکار پوشه و فایل‌های گم‌شده اندروید را می‌سازد
+      - run: flutter create . --platforms=android --org com.otared.vpn
+      
       - run: flutter pub get
       
       - run: flutter build apk --release
