@@ -84,7 +84,7 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
   List<VpnServer> _servers = [];
   List<VpnSubscription> _subs = [];
   String? _selectedId;
-  final List<String> _logs = ['[OTaredCore] Engine initialized (Sing-box / Xray Dual-Core Ready)'];
+  final List<String> _logs = ['[OTaredCore] Dual-Core Engine Ready'];
 
   String _routingMode = 'bypass_ir';
   String _dnsServer = 'https://1.1.1.1/dns-query';
@@ -166,13 +166,8 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
       final parsed = FlutterV2ray.parseFromURL(srv.rawUri);
       baseJson = parsed.getFullConfiguration();
     }
-
     final cfg = jsonDecode(baseJson) as Map<String, dynamic>;
-
-    cfg['dns'] = {
-      'servers': [_dnsServer, '8.8.8.8', 'localhost']
-    };
-
+    cfg['dns'] = {'servers': [_dnsServer, '8.8.8.8', 'localhost']};
     cfg['inbounds'] = [
       {
         'tag': 'socks',
@@ -182,14 +177,8 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
         'settings': {'auth': 'noauth', 'udp': true},
         'sniffing': {'enabled': true, 'destOverride': ['http', 'tls', 'quic']}
       },
-      {
-        'tag': 'http',
-        'port': _httpPort,
-        'listen': '127.0.0.1',
-        'protocol': 'http',
-      }
+      {'tag': 'http', 'port': _httpPort, 'listen': '127.0.0.1', 'protocol': 'http'}
     ];
-
     final outbounds = (cfg['outbounds'] as List?) ?? [];
     if (outbounds.isNotEmpty && outbounds[0] is Map<String, dynamic>) {
       final proxyOut = outbounds[0] as Map<String, dynamic>;
@@ -200,16 +189,13 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
         outbounds.add({
           'tag': 'fragment',
           'protocol': 'freedom',
-          'settings': {
-            'fragment': {'packets': 'tlshello', 'length': '10-20', 'interval': '10-20'}
-          }
+          'settings': {'fragment': {'packets': 'tlshello', 'length': '10-20', 'interval': '10-20'}}
         });
         final stream = (proxyOut['streamSettings'] as Map<String, dynamic>?) ?? {};
         stream['sockopt'] = {'dialerProxy': 'fragment', 'tcpFastOpen': true};
         proxyOut['streamSettings'] = stream;
       }
     }
-
     final rules = >[
       {'type': 'field', 'outboundTag': 'block', 'domain': ['geosite:category-ads-all']},
     ];
@@ -220,11 +206,9 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
       rules.add({'type': 'field', 'outboundTag': 'direct', 'port': '0-65535'});
     }
     cfg['routing'] = {'domainStrategy': 'IPIfNonMatch', 'rules': rules};
-
     return jsonEncode(cfg);
   }
-
-  Future<void> _toggleVpn() async {
+    Future<void> _toggleVpn() async {
     if (_status.state == 'CONNECTED') {
       await _v2ray.stopV2Ray();
       _log('Disconnected.');
@@ -237,11 +221,7 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
     final srv = _servers.firstWhere((e) => e.id == _selectedId, orElse: () => _servers.first);
     if (await _v2ray.requestPermission()) {
       final fullConfig = _compileOptimizedXrayConfig(srv);
-      final blockedList = _blockedApps
-          .split(',')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
+      final blockedList = _blockedApps.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
       _log('Connecting to ${srv.name} (${srv.protocol})...');
       await _v2ray.startV2Ray(
         remark: 'OTaredVPN - ${srv.name}',
@@ -251,7 +231,7 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
         proxyOnly: false,
       );
     } else {
-      _log('VPN permission denied by user.');
+      _log('VPN permission denied.');
     }
   }
 
@@ -271,13 +251,10 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
   Future<void> _smartSelectFastest() async {
     if (_servers.isEmpty || _testingPing) return;
     setState(() => _testingPing = true);
-    _log('Running parallel Real-Delay benchmark...');
     VpnServer? best;
     for (final s in _servers) {
       await _testSinglePing(s);
-      if (s.pingMs > 0 && (best == null || s.pingMs < best.pingMs)) {
-        best = s;
-      }
+      if (s.pingMs > 0 && (best == null || s.pingMs < best.pingMs)) best = s;
     }
     if (best != null) {
       setState(() => _selectedId = best!.id);
@@ -287,27 +264,21 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
     _saveState();
   }
 
-  Future<void> _importRawText(String text, {String? customTitle}) async {
+  Future<void> _importRawText(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
-
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-      final sub = VpnSubscription(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: customTitle ?? 'OTared 3x-ui Sub',
-        url: trimmed,
-      );
+      final sub = VpnSubscription(id: DateTime.now().millisecondsSinceEpoch.toString(), title: 'OTared 3x-ui', url: trimmed);
       try {
-        _log('Syncing subscription...');
         final (updatedSub, newServers) = await SanaeiEngine.fetchSubscription(sub);
         setState(() {
           _subs.add(updatedSub);
           _servers.addAll(newServers);
           if (_selectedId == null && _servers.isNotEmpty) _selectedId = _servers.first.id;
         });
-        _log('Imported ${newServers.length} nodes from ${updatedSub.title}');
+        _log('Synced ${newServers.length} nodes.');
       } catch (e) {
-        _log('Subscription error: $e');
+        _log('Sub error: $e');
       }
     } else {
       final parsed = SanaeiEngine.parseAnyFormat(trimmed);
@@ -325,7 +296,7 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
       context,
       MaterialPageRoute(
         builder: (ctx) => Scaffold(
-          appBar: AppBar(title: Text(t('اسکن کد QR سنایی', 'Scan 3x-ui QR Code'))),
+          appBar: AppBar(title: Text(t('اسکن QR سنایی', 'Scan QR'))),
           body: MobileScanner(
             onDetect: (capture) {
               final code = capture.barcodes.firstOrNull?.rawValue;
@@ -353,58 +324,17 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              t('افزودن کانفیگ یا لینک اشتراک سنایی', 'Import 3x-ui Config / Subscription'),
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-            ),
+            Text(t('افزودن کانفیگ / لینک ساب سنایی', 'Import 3x-ui Config / Sub'), style: const TextStyle(fontSize: 15)),
             const SizedBox(height: 12),
-            TextField(
-              controller: ctrl,
-              maxLines: 4,
-              style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
-              decoration: InputDecoration(
-                hintText: 'https://sub... | vless:// | vmess:// | trojan:// | JSON',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
+            TextField(controller: ctrl, maxLines: 4, style: const TextStyle(fontSize: 12, fontFamily: 'monospace'), decoration: InputDecoration(hintText: 'https://sub... | vless:// | vmess:// | JSON', border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)))),
             const SizedBox(height: 12),
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () async {
-                      final d = await Clipboard.getData(Clipboard.kTextPlain);
-                      if (d?.text != null) ctrl.text = d!.text!;
-                    },
-                    icon: const Icon(Icons.paste_rounded, size: 18),
-                    label: Text(t('کلیپ‌بورد', 'Clipboard')),
-                  ),
-                ),
+                Expanded(child: OutlinedButton.icon(onPressed: () async { final d = await Clipboard.getData(Clipboard.kTextPlain); if (d?.text != null) ctrl.text = d!.text!; }, icon: const Icon(Icons.paste_rounded, size: 18), label: Text(t('کلیپ‌بورد', 'Paste')))),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _openQrScanner();
-                    },
-                    icon: const Icon(Icons.qr_code_scanner_rounded, size: 18),
-                    label: Text(t('اسکن QR', 'Scan QR')),
-                  ),
-                ),
+                Expanded(child: OutlinedButton.icon(onPressed: () { Navigator.pop(ctx); _openQrScanner(); }, icon: const Icon(Icons.qr_code_scanner, size: 18), label: const Text('QR'))),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF14B88A),
-                      foregroundColor: Colors.black,
-                    ),
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _importRawText(ctrl.text);
-                    },
-                    child: Text(t('ثبت', 'Add'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ),
+                Expanded(child: ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF14B88A), foregroundColor: Colors.black), onPressed: () { Navigator.pop(ctx); _importRawText(ctrl.text); }, child: Text(t('ثبت', 'Add')))),
               ],
             ),
           ],
@@ -418,62 +348,30 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
     var val = bytes.toDouble();
     var idx = 0;
-    while (val >= 1024 && idx < units.length - 1) {
-      val /= 1024;
-      idx++;
-    }
+    while (val >= 1024 && idx < units.length - 1) { val /= 1024; idx++; }
     return '${val.toStringAsFixed(2)} ${units[idx]}';
   }
-
-  @override
+    @override
   Widget build(BuildContext context) {
     final isConnected = _status.state == 'CONNECTED';
     final accent = Theme.of(context).colorScheme.primary;
     final activeSrv = _servers.where((e) => e.id == _selectedId).firstOrNull ?? _servers.firstOrNull;
-
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: Row(
-          children: [
-            Image.asset('assets/logo.png', width: 28, height: 28, errorBuilder: (_, __, ___) => Icon(Icons.shield, color: accent)),
-            const SizedBox(width: 10),
-            const Text(
-              'OTaredVPN',
-              style: TextStyle(
-                fontWeight: FontWeight.w200,
-                letterSpacing: 3.2,
-                fontSize: 19,
-              ),
-            ),
-          ],
-        ),
+        title: Row(children: [
+          Image.asset('assets/logo.png', width: 28, height: 28, errorBuilder: (_, __, ___) => Icon(Icons.shield, color: accent)),
+          const SizedBox(width: 10),
+          const Text('OTaredVPN', style: TextStyle(fontWeight: FontWeight.w200, letterSpacing: 3.2, fontSize: 19)),
+        ]),
         actions: [
-          IconButton(
-            tooltip: t('تغییر حالت ساده / حرفه‌ای', 'Simple / Pro Mode'),
-            onPressed: () => setState(() => _proMode = !_proMode),
-            icon: Icon(_proMode ? Icons.tune_rounded : Icons.spa_outlined, size: 20, color: accent),
-          ),
-          IconButton(
-            onPressed: widget.onToggleLang,
-            icon: Text(widget.isFa ? 'EN' : 'فا', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-          ),
-          IconButton(
-            onPressed: widget.onToggleTheme,
-            icon: Icon(widget.darkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined, size: 20),
-          ),
+          IconButton(onPressed: () => setState(() => _proMode = !_proMode), icon: Icon(_proMode ? Icons.tune_rounded : Icons.spa_outlined, size: 20, color: accent)),
+          IconButton(onPressed: widget.onToggleLang, icon: Text(widget.isFa ? 'EN' : 'فا', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600))),
+          IconButton(onPressed: widget.onToggleTheme, icon: Icon(widget.darkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined, size: 20)),
         ],
       ),
-      body: IndexedStack(
-        index: _tabIndex,
-        children: [
-          _buildDashboardTab(isConnected, accent, activeSrv),
-          _buildServersTab(accent),
-          _buildAnalyticsTab(accent),
-          _buildSettingsTab(accent),
-        ],
-      ),
+      body: IndexedStack(index: _tabIndex, children: [_buildDashboardTab(isConnected, accent, activeSrv), _buildServersTab(accent), _buildAnalyticsTab(accent), _buildSettingsTab(accent)]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _tabIndex,
         onDestinationSelected: (i) => setState(() => _tabIndex = i),
@@ -482,7 +380,7 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
           NavigationDestination(icon: const Icon(Icons.power_settings_new_rounded), label: t('اتصال', 'Connect')),
           NavigationDestination(icon: const Icon(Icons.dns_outlined), label: t('سرورها', 'Nodes')),
           NavigationDestination(icon: const Icon(Icons.show_chart_rounded), label: t('آنالیز', 'Analytics')),
-          NavigationDestination(icon: const Icon(Icons.settings_outlined), label: t('تنظیمات', 'Pro Settings')),
+          NavigationDestination(icon: const Icon(Icons.settings_outlined), label: t('تنظیمات', 'Settings')),
         ],
       ),
     );
@@ -491,68 +389,105 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
   Widget _buildDashboardTab(bool isConnected, Color accent, VpnServer? activeSrv) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).cardColor,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: isConnected ? accent : Colors.grey.withOpacity(0.3)),
-                ),
-                child: Text(
-                  isConnected ? t('تونل رمزنگاری‌شده فعال است', 'ENCRYPTED TUNNEL ACTIVE') : t('آماده اتصال', 'STANDBY'),
-                  style: TextStyle(fontSize: 11, letterSpacing: 1.2, color: isConnected ? accent : Colors.grey),
-                ),
-              ),
-              TextButton.icon(
-                onPressed: _testingPing ? null : _smartSelectFastest,
-                icon: Icon(Icons.bolt_rounded, size: 18, color: accent),
-                label: Text(
-                  _testingPing ? t('در حال تست...', 'Testing...') : t('انتخاب سریع‌ترین', 'Smart Select'),
-                  style: TextStyle(fontSize: 12, color: accent),
-                ),
-              ),
-            ],
+      child: Column(children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6), decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20), border: Border.all(color: isConnected ? accent : Colors.grey.withOpacity(0.3))), child: Text(isConnected ? t('تونل فعال است', 'ACTIVE') : t('آماده اتصال', 'STANDBY'), style: TextStyle(fontSize: 11, color: isConnected ? accent : Colors.grey))),
+          TextButton.icon(onPressed: _testingPing ? null : _smartSelectFastest, icon: Icon(Icons.bolt_rounded, size: 18, color: accent), label: Text(_testingPing ? '...' : t('سریع‌ترین', 'Smart'), style: TextStyle(fontSize: 12, color: accent))),
+        ]),
+        const Spacer(),
+        GestureDetector(
+          onTap: _toggleVpn,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 350),
+            width: 184,
+            height: 184,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: Theme.of(context).cardColor, border: Border.all(color: isConnected ? accent : Colors.grey.withOpacity(0.3), width: 1.8), boxShadow: isConnected ? [BoxShadow(color: accent.withOpacity(0.28), blurRadius: 36)] : []),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.power_settings_new_rounded, size: 48, color: isConnected ? accent : Colors.grey),
+              const SizedBox(height: 8),
+              Text(isConnected ? _status.duration : 'OTaredVPN', style: TextStyle(fontWeight: FontWeight.w200, letterSpacing: 2.5, fontSize: 12, color: isConnected ? accent : Colors.grey)),
+            ]),
           ),
+        ),
+        const SizedBox(height: 24),
+        if (_proMode) Row(children: [_statCard(t('دانلود', 'DOWN'), '${_formatBytes(_status.downloadSpeed)}/s', accent), const SizedBox(width: 10), _statCard(t('آپلود', 'UP'), '${_formatBytes(_status.uploadSpeed)}/s', Colors.blueGrey)]),
+        const Spacer(),
+        InkWell(
+          onTap: () => setState(() => _tabIndex = 1),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.withOpacity(0.18))),
+            child: Row(children: [
+              Icon(Icons.security_rounded, color: accent),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(activeSrv?.name ?? t('سروری انتخاب نشده', 'No Server'), maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
+                Text(activeSrv != null ? '${activeSrv.protocol} • ${activeSrv.pingMs > 0 ? "${activeSrv.pingMs}ms" : "Ready"}' : t('افزودن کانفیگ سنایی', 'Tap to add'), style: const TextStyle(fontSize: 11, color: Colors.grey)),
+              ])),
+              IconButton(onPressed: _openImportModal, icon: Icon(Icons.add_circle_outline, color: accent)),
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _statCard(String title, String value, Color color) => Expanded(child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(14)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 10, color: Colors.grey)), const SizedBox(height: 4), Text(value, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: color))])));
+
+  Widget _buildServersTab(Color accent) {
+    return Column(children: [
+      Padding(padding: const EdgeInsets.all(12), child: Row(children: [
+        Expanded(child: ElevatedButton.icon(style: ElevatedButton.styleFrom(backgroundColor: accent, foregroundColor: Colors.black), onPressed: _openImportModal, icon: const Icon(Icons.add, size: 18), label: Text(t('افزودن', 'Add')))),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(onPressed: _openQrScanner, icon: const Icon(Icons.qr_code_scanner, size: 18), label: const Text('QR')),
+        const SizedBox(width: 8),
+        OutlinedButton.icon(onPressed: _testingPing ? null : _smartSelectFastest, icon: const Icon(Icons.speed, size: 18), label: Text(t('پینگ', 'Ping'))),
+      ])),
+      if (_subs.isNotEmpty) SizedBox(height: 74, child: ListView.builder(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 12), itemCount: _subs.length, itemBuilder: (ctx, i) {
+        final sub = _subs[i];
+        final ratio = sub.totalBytes > 0 ? (sub.usedBytes / sub.totalBytes).clamp(0.0, 1.0) : 0.0;
+        return Container(width: 230, margin: const EdgeInsets.only(right: 10), padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(12), border: Border.all(color: accent.withOpacity(0.35))), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [Expanded(child: Text(sub.title, maxLines: 1, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold))), InkWell(onTap: () async { _servers.removeWhere((s) => s.subId == sub.id); final (upd, list) = await SanaeiEngine.fetchSubscription(sub); setState(() { _subs[i] = upd; _servers.addAll(list); }); _saveState(); }, child: Icon(Icons.refresh, size: 16, color: accent))]),
           const Spacer(),
-          GestureDetector(
-            onTap: _toggleVpn,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 350),
-              width: 184,
-              height: 184,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Theme.of(context).cardColor,
-                border: Border.all(color: isConnected ? accent : Colors.grey.withOpacity(0.3), width: 1.8),
-                boxShadow: isConnected ? [BoxShadow(color: accent.withOpacity(0.28), blurRadius: 36)] : [],
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.power_settings_new_rounded, size: 48, color: isConnected ? accent : Colors.grey),
-                  const SizedBox(height: 8),
-                  Text(
-                    isConnected ? _status.duration : 'OTaredVPN',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w200,
-                      letterSpacing: 2.5,
-                      fontSize: 12,
-                      color: isConnected ? accent : Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          if (_proMode)
-            Row(
-              children: [
-                _statCard(t('دانلود لحظه‌ای', 'DOWNLOAD'), '${_formatBytes(_status.downloadSpeed)}/s', accent),
-                const SizedBox(width: 10),
-                _statCard(t('آپلود لحظه‌ای', 'UPLOAD'), '${_formatBytes(
+          LinearProgressIndicator(value: ratio, minHeight: 4, color: accent),
+          Text('${_formatBytes(sub.usedBytes)} / ${sub.totalBytes > 0 ? _formatBytes(sub.totalBytes) : "∞"}', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+        ]));
+      })),
+      Expanded(child: ListView.builder(padding: const EdgeInsets.all(12), itemCount: _servers.length, itemBuilder: (ctx, i) {
+        final s = _servers[i];
+        return Card(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: s.id == _selectedId ? accent : Colors.transparent)), child: ListTile(
+          onTap: () { setState(() => _selectedId = s.id); _saveState(); },
+          title: Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
+          subtitle: Text(s.protocol, style: TextStyle(fontSize: 11, color: accent)),
+          trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+            TextButton(onPressed: () => _testSinglePing(s), child: Text(s.pingMs == -2 ? '...' : (s.pingMs > 0 ? '${s.pingMs}ms' : 'Ping'), style: TextStyle(color: s.pingMs > 0 ? accent : Colors.grey, fontSize: 12))),
+            IconButton(icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent), onPressed: () { setState(() => _servers.removeAt(i)); _saveState(); }),
+          ]),
+        ));
+      })),
+    ]);
+  }
+
+  Widget _buildAnalyticsTab(Color accent) {
+    return Padding(padding: const EdgeInsets.all(16), child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+      Row(children: [_statCard(t('کل دانلود', 'DOWN'), _formatBytes(_status.download), accent), const SizedBox(width: 10), _statCard(t('کل آپلود', 'UP'), _formatBytes(_status.upload), Colors.amber)]),
+      const SizedBox(height: 12),
+      Container(height: 110, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(16)), child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: _speedHistory.map((v) => Expanded(child: Container(margin: const EdgeInsets.symmetric(horizontal: 2), height: (v * 2.5).clamp(4.0, 75.0), decoration: BoxDecoration(color: accent, borderRadius: BorderRadius.circular(3))))).toList())),
+      const SizedBox(height: 12),
+      Expanded(child: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(14)), child: ListView.builder(itemCount: _logs.length, itemBuilder: (_, i) => Text(_logs[i], style: const TextStyle(fontSize: 11, fontFamily: 'monospace'))))),
+    ]));
+  }
+
+  Widget _buildSettingsTab(Color accent) {
+    return ListView(padding: const EdgeInsets.all(16), children: [
+      ListTile(title: Text(t('مسیریابی', 'Routing')), trailing: DropdownButton<String>(value: _routingMode, items: [DropdownMenuItem(value: 'bypass_ir', child: Text(t('دور زدن ایران', 'Bypass IR'))), DropdownMenuItem(value: 'global', child: Text(t('پروکسی کامل', 'Global'))), DropdownMenuItem(value: 'direct', child: Text(t('مستقیم', 'Direct')))], onChanged: (v) { if (v != null) setState(() => _routingMode = v); _saveState(); })),
+      ListTile(title: const Text('DNS'), trailing: DropdownButton<String>(value: _dnsServer, items: const [DropdownMenuItem(value: 'https://1.1.1.1/dns-query', child: Text('1.1.1.1 DoH')), DropdownMenuItem(value: 'https://dns.google/dns-query', child: Text('Google DoH')), DropdownMenuItem(value: '1.1.1.1', child: Text('UDP 1.1.1.1'))], onChanged: (v) { if (v != null) setState(() => _dnsServer = v); _saveState(); })),
+      SwitchListTile(activeColor: accent, title: const Text('TLS Fragment'), value: _enableFragment, onChanged: (v) { setState(() => _enableFragment = v); _saveState(); }),
+      SwitchListTile(activeColor: accent, title: const Text('Multiplexing (Mux)'), value: _enableMux, onChanged: (v) { setState(() => _enableMux = v); _saveState(); }),
+      SwitchListTile(activeColor: accent, title: const Text('IPv6'), value: _enableIpv6, onChanged: (v) => setState(() => _enableIpv6 = v)),
+      ListTile(title: Text(t('پروکسی محلی', 'Local Proxy')), subtitle: Text('SOCKS5: 127.0.0.1:$_socksPort | HTTP: 127.0.0.1:$_httpPort')),
+      TextField(controller: TextEditingController(text: _blockedApps), decoration: InputDecoration(labelText: t('استثنا کردن برنامه‌ها (Split Tunneling)', 'Bypass Apps'), hintText: 'ir.nasim, com.app'), onChanged: (v) { _blockedApps = v; _saveState(); }),
+    ]);
+  }
+}
