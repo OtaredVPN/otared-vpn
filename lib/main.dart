@@ -81,7 +81,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 50),
-              // دکمه بزرگ اتصال (یک کلیک)
               GestureDetector(
                 onTap: () async {
                   if (_isConnected) {
