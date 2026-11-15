@@ -196,7 +196,7 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
         proxyOut['streamSettings'] = stream;
       }
     }
-    final rules = >[
+    final rules = [
       {'type': 'field', 'outboundTag': 'block', 'domain': ['geosite:category-ads-all']},
     ];
     if (_routingMode == 'bypass_ir') {
