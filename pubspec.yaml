@@ -1,5 +1,5 @@
 name: otared_vpn
-description: OTaredVPN - Minimal Luxury Client for 3x-ui
+description: OTaredVPN - Minimal Luxury Dual-Core Client for 3x-ui
 publish_to: "none"
 version: 2.0.0+2
 
@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  flutter_v2ray: ^1.0.11
+  flutter_v2ray: ^2.0.0
   mobile_scanner: ^5.2.3
   shared_preferences: ^2.3.2
   http: ^1.2.2
@@ -22,6 +22,4 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - assets/logo.png
-    
+  
