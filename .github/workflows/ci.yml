@@ -23,6 +23,8 @@ jobs:
           flutter create --org com.otared --project-name otared_vpn /tmp/otared_build
           cp -f pubspec.yaml /tmp/otared_build/pubspec.yaml
           cp -rf lib/* /tmp/otared_build/lib/
+          sed -i 's/final rules = >\[/final rules = \[/g' /tmp/otared_build/lib/main.dart
+          sed -i 's/final rules = >/final rules = /g' /tmp/otared_build/lib/main.dart
           mkdir -p /tmp/otared_build/assets
           cp -rf assets/* /tmp/otared_build/assets/ || true
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' /tmp/otared_build/android/app/build.gradle
