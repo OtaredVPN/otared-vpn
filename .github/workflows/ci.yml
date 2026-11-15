@@ -1,39 +1,22 @@
-name: OTARED VPN CI
+name: Build OTARED APK
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  build-android-apk:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
+      - uses: actions/checkout@v3
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.24.5"
-          channel: "stable"
-          cache: true
-      - name: Build OTaredVPN Release APK
-        run: |
-          flutter create --org com.otared --project-name otared_vpn /tmp/otared_build
-          cp -f pubspec.yaml /tmp/otared_build/pubspec.yaml
-          cp -rf lib/* /tmp/otared_build/lib/
-          sed -i 's/final rules = >\[/final rules = \[/g' /tmp/otared_build/lib/main.dart
-          sed -i 's/final rules = >/final rules = /g' /tmp/otared_build/lib/main.dart
-          mkdir -p /tmp/otared_build/assets
-          cp -rf assets/* /tmp/otared_build/assets/ || true
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' /tmp/otared_build/android/app/build.gradle
-          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 34/' /tmp/otared_build/android/app/build.gradle
-          cd /tmp/otared_build
-          flutter pub get
-          flutter build apk --release --split-per-abi
-      - uses: actions/upload-artifact@v4
+          flutter-version: '3.x'
+          channel: 'stable'
+      - run: flutter pub get
+      - run: flutter build apk --release
+      - uses: actions/upload-artifact@v3
         with:
-          name: otared-vpn-android-apks
-          path: /tmp/otared_build/build/app/outputs/flutter-apk/*.apk
+          name: otared-vpn-release
+          path: build/app/outputs/flutter-apk/app-release.apk
           
