@@ -159,41 +159,41 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
   }
 
   String _buildConfig(VpnServer srv) {
-    final baseJson = srv.rawUri.trim().startsWith('{')
+    final rawConfig = srv.rawUri.trim().startsWith('{')
         ? srv.rawUri
         : FlutterV2ray.parseFromURL(srv.rawUri).getFullConfiguration();
-    if (!_enableFragment && !_enableMux && _routingMode == 'global') {
-      return baseJson;
+    
+    try {
+      final cfg = jsonDecode(rawConfig) as Map<String, dynamic>;
+      cfg['inbounds'] = [
+        {
+          'tag': 'socks-inbound',
+          'port': _socksPort,
+          'listen': '127.0.0.1',
+          'protocol': 'socks',
+          'settings': {'auth': 'noauth', 'udp': true}
+        },
+        {
+          'tag': 'http-inbound',
+          'port': _httpPort,
+          'listen': '127.0.0.1',
+          'protocol': 'http',
+          'settings': {}
+        }
+      ];
+      cfg['dns'] = {
+        'servers': [_dnsServer, '8.8.8.8', '1.1.1.1']
+      };
+      cfg['routing'] = {
+        'domainStrategy': 'IPOnDemand',
+        'rules': [
+          {'type': 'field', 'outboundTag': 'proxy', 'ip': ['geoip:private']}
+        ]
+      };
+      return jsonEncode(cfg);
+    } catch (e) {
+      return rawConfig;
     }
-    final cfg = jsonDecode(baseJson) as Map<String, dynamic>;
-    cfg['dns'] = {'servers': [_dnsServer, '8.8.8.8', 'localhost']};
-    final outbounds = (cfg['outbounds'] as List?) ?? [];
-    if (outbounds.isNotEmpty && outbounds[0] is Map<String, dynamic>) {
-      final proxyOut = outbounds[0] as Map<String, dynamic>;
-      if (_enableMux && srv.protocol != 'HY2' && srv.protocol != 'HYSTERIA2') {
-        proxyOut['mux'] = {'enabled': true, 'concurrency': 8, 'xudpConcurrency': 8};
-      }
-      if (_enableFragment) {
-        outbounds.add({
-          'tag': 'fragment',
-          'protocol': 'freedom',
-          'settings': {'fragment': {'packets': 'tlshello', 'length': '10-20', 'interval': '10-20'}}
-        });
-        final stream = (proxyOut['streamSettings'] as Map<String, dynamic>?) ?? {};
-        stream['sockopt'] = {'dialerProxy': 'fragment', 'tcpFastOpen': true};
-        proxyOut['streamSettings'] = stream;
-      }
-    }
-    final rules = >[];
-    if (_routingMode == 'bypass_ir') {
-      rules.add({'type': 'field', 'outboundTag': 'direct', 'domain': ['regexp:.*\\.ir\$']});
-    } else if (_routingMode == 'direct') {
-      rules.add({'type': 'field', 'outboundTag': 'direct', 'port': '0-65535'});
-    }
-    if (rules.isNotEmpty) {
-      cfg['routing'] = {'domainStrategy': 'IPIfNonMatch', 'rules': rules};
-    }
-    return jsonEncode(cfg);
   }
 
   Future<void> _toggleVpn() async {
@@ -223,7 +223,7 @@ class _OTaredHomeScreenState extends State<OTaredHomeScreen> {
         blockedApps: blocked.isEmpty ? null : blocked,
         proxyOnly: false,
       );
-      _log('Tunnel command sent.');
+      _log('Tunnel command sent successfully.');
     } catch (e) {
       _log('ERROR: $e');
     }
