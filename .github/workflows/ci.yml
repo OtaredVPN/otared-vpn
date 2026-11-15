@@ -10,12 +10,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      # تنظیم دقیق نسخه جاوا 17 برای جلوگیری از خطای گرادل
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.x'
           channel: 'stable'
           
-      # این دستور به صورت خودکار پوشه و فایل‌های گم‌شده اندروید را می‌سازد
       - run: flutter create . --platforms=android --org com.otared.vpn
       
       - run: flutter pub get
